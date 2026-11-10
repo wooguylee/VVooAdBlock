@@ -7,8 +7,14 @@ const ancestors = location.ancestorOrigins;
 const vvooBlockingReady = chrome.runtime.sendMessage({
   type: "page-state",
   topOrigin: ancestors.length ? ancestors[ancestors.length - 1] : undefined
-}).then(state => {
+}).then(async state => {
   const enabled = state?.enabled === true;
+  if (!document.documentElement) await new Promise(resolve => {
+    const observer = new MutationObserver(() => {
+      if (document.documentElement) { observer.disconnect(); resolve(); }
+    });
+    observer.observe(document, { childList: true });
+  });
   document.documentElement.toggleAttribute("data-vvoo-adblock", enabled);
   return enabled;
 }).catch(() => false);

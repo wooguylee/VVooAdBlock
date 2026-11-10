@@ -1,4 +1,27 @@
 const dnr = chrome.declarativeNetRequest;
+const youtubeMatches = chrome.runtime.getManifest().host_permissions;
+
+// Persisted registration runs before the first inline player bootstrap, even with a sleeping worker.
+async function syncPlayerFilters() {
+  const rules = await dnr.getDynamicRules();
+  const excluded = new Set();
+  for (const rule of rules) {
+    const host = /^\|https:\/\/([^/]+)\^$/.exec(rule.condition.urlFilter)?.[1];
+    if (host && (["youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com"].includes(host) ||
+      host === "youtube-nocookie.com" || host.endsWith(".youtube-nocookie.com"))) excluded.add("*://" + host + "/*");
+  }
+  const common = { matches: youtubeMatches, runAt: "document_start", world: "MAIN", persistAcrossSessions: true };
+  const scripts = [
+    { ...common, id: "youtube-playback", excludeMatches: [...excluded], js: ["youtube-playback.js", "youtube-top.js"] },
+    { ...common, id: "youtube-embeds", allFrames: true, matches: youtubeMatches.map(m => m.endsWith("/embed/*") ? m : m.slice(0, -1) + "embed/*"),
+      js: ["youtube-playback.js", "youtube-frame.js"] }
+  ];
+  const installed = await chrome.scripting.getRegisteredContentScripts();
+  for (const script of scripts) {
+    if (installed.some(s => s.id === script.id)) await chrome.scripting.updateContentScripts([script]);
+    else await chrome.scripting.registerContentScripts([script]);
+  }
+}
 
 function supportedHost(rawUrl) {
   if (!rawUrl) return null;
@@ -55,6 +78,13 @@ async function setBlocking(host, enabled) {
 
 // Chrome applies each rule update atomically. Serialize read-modify-write operations from separate windows.
 let pendingWrite = Promise.resolve();
+function enqueue(write) {
+  const result = pendingWrite.then(write);
+  pendingWrite = result.catch(() => {});
+  return result;
+}
+chrome.runtime.onInstalled.addListener(() => enqueue(syncPlayerFilters));
+chrome.runtime.onStartup.addListener(() => enqueue(syncPlayerFilters));
 async function handle(message, sender) {
   if (message.type === "page-state" && sender.tab) {
     const host = supportedHost(sender.frameId === 0 ? sender.url : message.topOrigin);
@@ -67,9 +97,20 @@ async function handle(message, sender) {
   }
   if (!host || host !== message.host) throw new Error("Tab changed");
   if (message.type === "set-blocking" && typeof message.enabled === "boolean") {
-    const write = pendingWrite.then(() => setBlocking(host, message.enabled));
-    pendingWrite = write.catch(() => {});
-    return { host, enabled: await write };
+    return enqueue(async () => {
+      const before = await blockingEnabled(host);
+      await setBlocking(host, message.enabled);
+      if (before === message.enabled || !youtubeMatches.some(m => m.includes("://" + host + "/")) &&
+          host !== "youtube-nocookie.com" && !host.endsWith(".youtube-nocookie.com")) return { host, enabled: message.enabled };
+      try {
+        await syncPlayerFilters();
+      } catch (error) {
+        await setBlocking(host, before);
+        await syncPlayerFilters();
+        throw error;
+      }
+      return { host, enabled: message.enabled };
+    });
   }
   if (message.type === "reload-tab") {
     await chrome.tabs.reload(message.tabId);

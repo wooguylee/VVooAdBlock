@@ -25,6 +25,13 @@
   display: none !important;
 }
 
-:root[data-vvoo-adblock] .html5-video-player:is(.ad-showing, .ad-interrupting) video {
-  visibility: hidden !important;
+/* Keep native skip controls laid out and operable by the extension, including during countdowns. */
+:root[data-vvoo-adblock] .html5-video-player:is(.ad-showing, .ad-interrupting) {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Avoid painting the dismissible warning while YouTube runs its own close animation. */
+:root[data-vvoo-adblock] [data-vvoo-dismissing-ad-notice] {
+  opacity: 0 !important;
 }

@@ -53,7 +53,7 @@ function vvooInstallPlaybackFilter(isEnabled) {
   }
 
   // Inline HTML assigns these globals before starting the player on a direct navigation.
-  for (const key of ["ytInitialPlayerResponse", "ytInitialData"]) {
+  for (const key of ["ytInitialPlayerResponse", "ytInitialData", "ytInitialReelWatchSequenceResponse"]) {
     const original = Object.getOwnPropertyDescriptor(window, key);
     if (original && (!original.configurable || original.get || original.set)) continue;
     let value = window[key];

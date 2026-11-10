@@ -8,6 +8,10 @@ const feedPayload = {entries: [
   {continuation:"next-page"}
 ]};
 const startPlayer = `<script>
+  // Same two assignments as the Shorts bootstrap: serialized global, then parsed global.
+  var ytInitialReelWatchSequenceResponse = ${JSON.stringify(JSON.stringify({...feedPayload, continuationEndpoint:{token:"more"}}))};
+  window["ytInitialReelWatchSequenceResponse"] = JSON.parse(ytInitialReelWatchSequenceResponse);
+  window.firstQueue = ytInitialReelWatchSequenceResponse.entries.map(e => e.command?.reelWatchEndpoint.videoId || e.continuation);
   window.ytInitialPlayerResponse = ${JSON.stringify(playerPayload)};
   async function play(data) {
     if (data.adPlacements?.length) await fetch(data.adPlacements[0].url);
@@ -66,6 +70,8 @@ module.exports = async function checkYouTube(context, popupUrl) {
   });
   const page = await context.newPage();
   await page.goto(testUrl);
+  assert.deepEqual(await page.evaluate(() => [window.firstQueue, ytInitialReelWatchSequenceResponse.continuationEndpoint.token]),
+    [["organicVideo","next-page"],"more"], "no sponsored Short reaches the first playback queue");
   assert.deepEqual(await page.evaluate(() => window.startup), ["OK", ["organicVideo","next-page"]]);
   assert.deepEqual(requests, Array(3).fill("/media-test/main"), "zero creative requests across inline, fetch stream and XHR");
   await page.waitForSelector("html[data-vvoo-adblock]", { state: "attached" });
@@ -95,6 +101,26 @@ module.exports = async function checkYouTube(context, popupUrl) {
     return !video.muted && video.playbackRate === 1.5 && getComputedStyle(video.parentElement).opacity === "1";
   });
   assert.equal(await page.evaluate(() => window.nextCount), 0, "a tagged organic Short must not be skipped");
+  const reel = page.locator("ytd-reel-video-renderer").first();
+  await reel.evaluate(el => {
+    const preloaded = el.parentElement.appendChild(document.createElement("ytd-reel-video-renderer"));
+    preloaded.style.transform = "translateY(150vh)";
+    preloaded.setAttribute("is-ads-overlay", "");
+    el.setAttribute("is-ads-overlay", "false");
+  });
+  await page.waitForTimeout(850);
+  assert.deepEqual(await reel.evaluate(el => [getComputedStyle(el).opacity, window.nextCount]), ["1", 0],
+    "an offscreen ad must not advance the visible organic Short even with no social controls");
+  assert.equal(await reel.evaluate(el => {
+    el.setAttribute("is-ads-overlay", "");
+    return getComputedStyle(el).opacity;
+  }), "0", "a prepared sponsored reel is concealed before the next paint");
+  await page.waitForFunction(() => window.nextCount === 1);
+  await reel.evaluate(el => {
+    el.removeAttribute("is-ads-overlay");
+    el.parentElement.querySelector('ytd-reel-video-renderer[is-ads-overlay]').remove();
+    window.nextCount = 0;
+  });
   await page.evaluate(() => {
     document.body.insertAdjacentHTML("beforeend", '<ytd-enforcement-message-view-model><h2 id="title">광고 차단 프로그램은 YouTube에서 허용되지 않습니다</h2><div id="dismiss-button"><button onclick="this.closest(\'ytd-enforcement-message-view-model\').remove()">닫기</button></div></ytd-enforcement-message-view-model><dialog open><button>닫기</button></dialog>');
   });
@@ -154,6 +180,10 @@ module.exports = async function checkYouTube(context, popupUrl) {
   await settings.waitForFunction(() => document.querySelector('[role="switch"]').getAttribute("aria-checked") === "false");
   requests.length = 0;
   await page.goto(reportedUrl);
+  assert.deepEqual(await page.evaluate(() => window.firstQueue), ["organicVideo","feedAdVideo","next-page"]);
+  const allowedReel = page.locator("ytd-reel-video-renderer");
+  await allowedReel.evaluate(el => el.setAttribute("is-ads-overlay", ""));
+  assert.equal(await allowedReel.evaluate(el => getComputedStyle(el).opacity), "1", "ads remain visible on an excepted site");
   assert.deepEqual(await page.evaluate(() => window.startup), ["OK", ["organicVideo","feedAdVideo","next-page"]]);
   assert.deepEqual(requests, ["/media-test/ad","/media-test/main","/media-test/ad","/media-test/main","/media-test/ad","/media-test/main"]);
   assert(await product.isVisible());

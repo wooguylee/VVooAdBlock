@@ -78,7 +78,7 @@
     });
     const videoId = shortIdFromUrl(location.href);
     const reported = blockedShortIds.has(videoId);
-    const hasAdSlot = !!(reel?.matches('[is-ad]:not([is-ad="false"])') ||
+    const hasAdSlot = !!(reel?.matches('[is-ads-overlay]:not([is-ads-overlay="false"]), [is-ad]:not([is-ad="false"])') ||
       reel?.querySelector(":scope > ytd-ad-slot-renderer, :scope > #short-video-container > ytd-ad-slot-renderer"));
     if (recording) {
       const channel = reel?.querySelector('a[href^="/@"]');
@@ -148,7 +148,9 @@
     // YouTube appends the native close control asynchronously. Dismiss it in the mutation turn.
     new MutationObserver(mutations => {
       if (!document.documentElement.hasAttribute("data-vvoo-adblock")) return;
+      if (mutations.some(m => m.type === "attributes" && m.target.matches("ytd-reel-video-renderer"))) skipShortsAd();
       for (const m of mutations) {
+        if (m.type !== "childList") continue;
         if ((m.target.nodeType === 1 ? m.target : m.target.parentElement)?.closest("ytd-enforcement-message-view-model") ||
             [...m.addedNodes].some(n => n.nodeType === 1 && (n.matches("ytd-enforcement-message-view-model") ||
               n.querySelector("ytd-enforcement-message-view-model")))) {
@@ -156,7 +158,8 @@
           break;
         }
       }
-    }).observe(document.documentElement, { childList: true, subtree: true });
+    }).observe(document.documentElement, { childList: true, subtree: true,
+      attributes: true, attributeFilter: ["is-ads-overlay", "is-ad"] });
     let timer = setInterval(refresh, 400);
     document.addEventListener("playing", refresh, true);
     window.addEventListener("pagehide", () => {

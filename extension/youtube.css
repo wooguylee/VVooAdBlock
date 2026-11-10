@@ -26,6 +26,7 @@
 }
 
 /* Keep native skip controls laid out and operable by the extension, including during countdowns. */
+:root[data-vvoo-adblock] ytd-shorts ytd-reel-video-renderer:is([is-ads-overlay]:not([is-ads-overlay="false"]), [is-ad]:not([is-ad="false"])),
 :root[data-vvoo-adblock] .html5-video-player:is(.ad-showing, .ad-interrupting) {
   opacity: 0 !important;
   pointer-events: none !important;

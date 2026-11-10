@@ -1,0 +1,44 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "requestDomains": [
+        "ad.daum.net", "adfit.kakao.com", "adimg.daumcdn.net",
+        "adcr.naver.com", "adcreative.naver.com", "adimg.naver.com",
+        "gfp.veta.naver.com", "nv.veta.naver.com", "siape.veta.naver.com",
+        "adnxs.com", "ads.pubmatic.com", "adsrvr.org", "amazon-adsystem.com",
+        "casalemedia.com", "criteo.net", "doubleclick.net",
+        "googleadservices.com", "googlesyndication.com", "googletagservices.com",
+        "openx.net", "ads.stickyadstv.com", "rubiconproject.com"
+      ],
+      "excludedResourceTypes": ["main_frame"]
+    }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "requestDomains": ["t1.kakaocdn.net", "t1.daumcdn.net"],
+      "urlFilter": "/kas/static/ba.min.js^",
+      "resourceTypes": ["script"]
+    }
+  },
+  {
+    "id": 3,
+    "action": { "type": "block" },
+    "condition": { "urlFilter": "||youtube.com/pagead/", "excludedResourceTypes": ["main_frame"] }
+  },
+  {
+    "id": 4,
+    "action": { "type": "block" },
+    "condition": { "urlFilter": "||youtube.com/get_midroll_info^", "resourceTypes": ["xmlhttprequest"] }
+  },
+  {
+    "id": 5,
+    "action": { "type": "block" },
+    "condition": { "urlFilter": "||youtube.com/youtubei/v1/player/ad_break^", "resourceTypes": ["xmlhttprequest"] }
+  }
+]

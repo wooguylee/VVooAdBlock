@@ -1,0 +1,37 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f8faf9;
+  --card: #fff;
+  --ink: #193a34;
+  --muted: #526963;
+  --line: #cfddd7;
+  --accent: #087763;
+  --off: #758681;
+  font: 14px/1.55 "Malgun Gothic", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #13231f; --card: #1c332d; --ink: #eaf6f1;
+    --muted: #acc4bb; --line: #3c564c; --accent: #55bba2; --off: #64766f;
+  }
+}
+* { box-sizing: border-box; }
+body { width: 320px; margin: 0; color: var(--ink); background: var(--bg); }
+header { display: flex; align-items: center; gap: 9px; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+header strong { font: 650 15px/1.2 system-ui, sans-serif; }
+main { padding: 18px; }
+.site-label, #notice { margin: 0; color: var(--muted); font-size: 12px; }
+h1 { font: 650 22px/1.35 system-ui, sans-serif; overflow-wrap: anywhere; margin: 3px 0 16px; }
+button { color: inherit; font: inherit; cursor: pointer; }
+button:disabled { cursor: default; opacity: .65; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+#toggle {
+  display: flex; width: 100%; align-items: center; justify-content: space-between;
+  padding: 12px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--card); font-weight: 650;
+}
+.track { display: flex; width: 36px; height: 22px; padding: 3px; border-radius: 12px; background: var(--off); }
+.track span { width: 16px; height: 16px; background: #fff; border-radius: 50%; }
+[aria-checked="true"] .track { justify-content: flex-end; background: var(--accent); }
+#notice { margin-top: 10px; }
+#reload { background: var(--card); margin-top: 10px; border: 1px solid var(--line); border-radius: 7px; padding: 5px 10px; }

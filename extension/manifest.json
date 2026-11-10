@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "VVoo AdBlock",
+  "version": "1.1.0",
+  "minimum_chrome_version": "101",
+  "description": "광고 서버 요청을 차단하고 광고 배너 자리를 숨깁니다. 사이트마다 차단을 켜거나 끌 수 있습니다.",
+  "permissions": ["declarativeNetRequest", "activeTab"],
+  "icons": {
+    "16": "icons/16.png", "32": "icons/32.png",
+    "48": "icons/48.png", "128": "icons/128.png"
+  },
+  "action": {
+    "default_title": "VVoo AdBlock · 사이트 설정",
+    "default_popup": "popup.html",
+    "default_icon": { "16": "icons/16.png", "32": "icons/32.png" }
+  },
+  "background": { "service_worker": "background.js" },
+  "declarative_net_request": {
+    "rule_resources": [
+      { "id": "advertising", "enabled": true, "path": "rules/advertising.json" },
+      { "id": "adaway", "enabled": true, "path": "rules/adaway.json" }
+    ]
+  },
+  "content_scripts": [{
+    "matches": ["http://*/*", "https://*/*"],
+    "exclude_matches": ["*://www.youtube.com/*", "*://youtube.com/*", "*://m.youtube.com/*", "*://music.youtube.com/*", "*://*.youtube-nocookie.com/embed/*"],
+    "js": ["content.js"],
+    "css": ["slots.css"],
+    "run_at": "document_end"
+  }, {
+    "matches": ["*://www.youtube.com/*", "*://youtube.com/*", "*://m.youtube.com/*", "*://music.youtube.com/*", "*://*.youtube-nocookie.com/embed/*"],
+    "js": ["content.js", "youtube.js"],
+    "css": ["slots.css", "youtube.css"],
+    "run_at": "document_end",
+    "all_frames": true
+  }]
+}

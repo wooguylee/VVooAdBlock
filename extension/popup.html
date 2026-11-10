@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VVoo AdBlock</title>
+  <link rel="stylesheet" href="popup.css">
+  <script src="popup.js" defer></script>
+</head>
+<body>
+  <header><img src="icons/32.png" width="24" height="24" alt=""><strong>VVoo AdBlock</strong></header>
+  <main>
+    <p class="site-label">현재 사이트</p>
+    <h1 id="host">확인 중…</h1>
+    <button id="toggle" type="button" role="switch" aria-checked="false" disabled>
+      <span>이 사이트에서 광고 차단</span>
+      <span class="track" aria-hidden="true"><span></span></span>
+    </button>
+    <p id="notice" role="status"></p>
+    <button id="reload" type="button" hidden>탭 새로고침</button>
+  </main>
+</body>
+</html>

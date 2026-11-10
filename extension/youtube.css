@@ -1,0 +1,30 @@
+/* Keep the reel, social controls and non-commercial stickers in place. */
+:root[data-vvoo-adblock] :is(
+  .ytOverlayProductStickerHost,
+  yt-product-sticker-view-model,
+  yt-overlay-sticker:has(.ytOverlayProductStickerHost),
+  ytd-reel-shopping-shelf-renderer,
+  #shopping-timely-shelf,
+  ytd-merch-shelf-renderer
+) {
+  display: none !important;
+}
+
+:root[data-vvoo-adblock] :is(
+  #masthead-ad, #player-ads,
+  ytd-ad-slot-renderer, ad-slot-renderer, ytm-ad-slot-renderer,
+  ytd-in-feed-ad-layout-renderer, ytd-display-ad-renderer,
+  ytd-promoted-sparkles-web-renderer, ytd-promoted-sparkles-text-search-renderer,
+  ytd-promoted-video-renderer, ytd-compact-promoted-video-renderer,
+  ytd-search-pyv-renderer, ytd-video-masthead-ad-v3-renderer,
+  ytd-action-companion-ad-renderer, ytd-companion-slot-renderer, ytm-companion-ad-renderer,
+  ytd-rich-item-renderer:has(> #content > ytd-ad-slot-renderer),
+  ytm-rich-item-renderer:has(> ad-slot-renderer),
+  .ytp-ad-overlay-container, .ytp-ad-image-overlay, .ytp-ad-action-interstitial-sidebar
+) {
+  display: none !important;
+}
+
+:root[data-vvoo-adblock] .html5-video-player:is(.ad-showing, .ad-interrupting) video {
+  visibility: hidden !important;
+}

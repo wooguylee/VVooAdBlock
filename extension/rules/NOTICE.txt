@@ -1,0 +1,8 @@
+AdAway default blocklist
+Contributors include Kicelo, Dominik Schuermann and the AdAway contributors.
+Source: https://github.com/AdAway/adaway.github.io/blob/f39ba0a523564447dfa94e40327c1a14c02304dc/hosts.txt
+License: Creative Commons Attribution 3.0 Unported, https://creativecommons.org/licenses/by/3.0/
+
+VVoo AdBlock converts unique host entries into exact-host Chrome HTTP/HTTPS
+rules for third-party subresources and omits localhost. This notice applies
+to adaway.json. The separately authored advertising.json supplements it.

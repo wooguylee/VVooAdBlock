@@ -1,0 +1,10 @@
+:root[data-vvoo-adblock] :is(
+  ins.adsbygoogle,
+  ins.kakao_ad_area,
+  [data-ad-client][data-ad-slot],
+  [id^="div-gpt-ad-"],
+  iframe[id^="google_ads_iframe_"],
+  iframe[id^="aswift_"][title="Advertisement"]
+) {
+  display: none !important;
+}

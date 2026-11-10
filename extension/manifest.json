@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "VVoo AdBlock",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "minimum_chrome_version": "105",
   "description": "광고 서버 요청을 차단하고 광고 배너 자리를 숨깁니다. 사이트마다 차단을 켜거나 끌 수 있습니다.",
   "permissions": ["declarativeNetRequest", "activeTab", "storage", "scripting"],

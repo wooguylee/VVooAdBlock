@@ -1,4 +1,4 @@
-// Runs in the player world. Only advertising instructions in playback/Shorts data are filtered.
+// Runs in the player world. Filter ads and inactivity interruptions before playback consumes them.
 function vvooInstallPlaybackFilter(isEnabled) {
   const playerFields = ["adPlacements", "playerAds", "adSlots", "adBreakHeartbeatParams"];
   const apiPath = /^\/youtubei\/v1\/(?:player|next|get_watch|playlist|reel\/reel_watch_sequence|reel_watch_sequence|navigation\/resolve_url)\/?$/;
@@ -22,6 +22,16 @@ function vvooInstallPlaybackFilter(isEnabled) {
       for (const field of playerFields) {
         if (Object.hasOwn(player, field) && Reflect.deleteProperty(player, field)) changed = true;
       }
+      // The watch page schedules both the confirmation dialog and PAUSE_PLAYER from
+      // youThereRenderer. Removing only this message prevents the timer from starting;
+      // hiding the dialog alone would leave the video paused. Keep all other notices.
+      if (Array.isArray(player.messages)) {
+        const messages = player.messages.filter(message => !message?.youThereRenderer);
+        if (messages.length !== player.messages.length) {
+          player.messages = messages;
+          changed = true;
+        }
+      }
     }
     for (const sequence of [data, data.reelWatchSequenceResponse]) {
       if (!Array.isArray(sequence?.entries)) continue;
@@ -42,7 +52,7 @@ function vvooInstallPlaybackFilter(isEnabled) {
   }
 
   function cleanText(raw) {
-    if (!/"(?:adPlacements|playerAds|adSlots|adBreakHeartbeatParams|adClientParams)"/.test(raw)) return raw;
+    if (!/"(?:adPlacements|playerAds|adSlots|adBreakHeartbeatParams|adClientParams|youThereRenderer)"/.test(raw)) return raw;
     const prefix = raw.match(/^\)\]\}'[^\n]*\n/)?.[0] || "";
     try {
       const parsed = JSON.parse(raw.slice(prefix.length));

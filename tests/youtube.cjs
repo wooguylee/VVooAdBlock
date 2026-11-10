@@ -1,7 +1,19 @@
 const assert = require("node:assert/strict");
 
+// The watch page schedules both the dialog and PAUSE_PLAYER from this message.
+const inactivityMessage = { youThereRenderer: { configData: { youThereData: {
+  lactThresholdMs: "0", promptDelaySec: 0, playbackPauseDelayMs: 0,
+  showPausedActions: [
+    { openPopupAction: { popupType: "DIALOG", popup: { confirmDialogRenderer: {
+      dialogMessages: [{ runs: [{ text: "동영상이 일시중지되었습니다. 이어서 시청하시겠어요?" }] }]
+    } } } },
+    { signalAction: { signal: "PAUSE_PLAYER" } }
+  ]
+} } } };
+const ordinaryMessage = { mealbarPromoRenderer: { message: "ordinary notice" } };
 const playerPayload = { videoDetails: {videoId:"testContent"}, streamingData: {url:"/media-test/main"},
-  playabilityStatus: {status:"OK"}, adPlacements:[{url:"/media-test/ad"}], adSlots:[{}], playerAds:[{}] };
+  playabilityStatus: {status:"OK"}, adPlacements:[{url:"/media-test/ad"}], adSlots:[{}], playerAds:[{}],
+  messages: [inactivityMessage, ordinaryMessage] };
 const feedPayload = {entries: [
   {command:{reelWatchEndpoint:{videoId:"organicVideo"}}},
   {command:{reelWatchEndpoint:{videoId:"feedAdVideo",adClientParams:{isAd:true}}}},
@@ -13,7 +25,12 @@ const startPlayer = `<script>
   window["ytInitialReelWatchSequenceResponse"] = JSON.parse(ytInitialReelWatchSequenceResponse);
   window.firstQueue = ytInitialReelWatchSequenceResponse.entries.map(e => e.command?.reelWatchEndpoint.videoId || e.continuation);
   window.ytInitialPlayerResponse = ${JSON.stringify(playerPayload)};
+  window.inactivityActions = [];
   async function play(data) {
+    for (const message of data.messages || []) {
+      const actions = message.youThereRenderer?.configData?.youThereData?.showPausedActions || [];
+      for (const action of actions) window.inactivityActions.push(action.signalAction?.signal || action.openPopupAction?.popupType);
+    }
     if (data.adPlacements?.length) await fetch(data.adPlacements[0].url);
     await fetch(data.streamingData.url);
   }
@@ -65,6 +82,11 @@ module.exports = async function checkYouTube(context, popupUrl) {
       requests.push(path);
       return route.fulfill({body:"media"});
     }
+    if (path.endsWith("/next")) {
+      const player = { messages: [inactivityMessage, ordinaryMessage], playabilityStatus: {status:"OK"} };
+      return route.fulfill({ json: { playerResponse: player,
+        endpoint: { watchEndpoint: { unserializedPrefetchData: { playerResponse: player } } } } });
+    }
     if (path.startsWith("/youtubei/")) return route.fulfill({json:path.endsWith("/player") ? playerPayload : feedPayload});
     return route.fulfill({ contentType: "text/html; charset=utf-8", body: fixture.replace("<meta", startPlayer + "<meta") });
   });
@@ -73,6 +95,15 @@ module.exports = async function checkYouTube(context, popupUrl) {
   assert.deepEqual(await page.evaluate(() => [window.firstQueue, ytInitialReelWatchSequenceResponse.continuationEndpoint.token]),
     [["organicVideo","next-page"],"more"], "no sponsored Short reaches the first playback queue");
   assert.deepEqual(await page.evaluate(() => window.startup), ["OK", ["organicVideo","next-page"]]);
+  assert.deepEqual(await page.evaluate(() => window.inactivityActions), [],
+    "neither the inactivity dialog nor automatic pause is scheduled across inline, fetch and XHR");
+  assert.deepEqual(await page.evaluate(() => window.ytInitialPlayerResponse.messages), [ordinaryMessage],
+    "unrelated player notices survive");
+  // Ad-free playback responses still carry inactivity instructions, including prefetched navigation.
+  assert.deepEqual(await page.evaluate(async () => {
+    const data = await (await fetch("/youtubei/v1/next")).json();
+    return [data.playerResponse.messages, data.endpoint.watchEndpoint.unserializedPrefetchData.playerResponse.messages];
+  }), [[ordinaryMessage], [ordinaryMessage]]);
   assert.deepEqual(requests, Array(3).fill("/media-test/main"), "zero creative requests across inline, fetch stream and XHR");
   await page.waitForSelector("html[data-vvoo-adblock]", { state: "attached" });
   const product = page.getByText("쇼핑하기", { exact: true });
@@ -185,6 +216,9 @@ module.exports = async function checkYouTube(context, popupUrl) {
   await allowedReel.evaluate(el => el.setAttribute("is-ads-overlay", ""));
   assert.equal(await allowedReel.evaluate(el => getComputedStyle(el).opacity), "1", "ads remain visible on an excepted site");
   assert.deepEqual(await page.evaluate(() => window.startup), ["OK", ["organicVideo","feedAdVideo","next-page"]]);
+  assert.deepEqual(await page.evaluate(() => window.inactivityActions),
+    ["DIALOG", "PAUSE_PLAYER", "DIALOG", "PAUSE_PLAYER", "DIALOG", "PAUSE_PLAYER"],
+    "an excepted site retains its native inactivity behavior");
   assert.deepEqual(requests, ["/media-test/ad","/media-test/main","/media-test/ad","/media-test/main","/media-test/ad","/media-test/main"]);
   assert(await product.isVisible());
   assert(await page.getByText("광고 카드").isVisible());

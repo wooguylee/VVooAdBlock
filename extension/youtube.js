@@ -31,6 +31,7 @@
       const button = notice.querySelector("#dismiss-button button");
       if (clickable(button) && performance.now() - (lastClick.get(button) ?? -Infinity) > 1000) {
         lastClick.set(button, performance.now());
+        notice.dispatchEvent(new Event("vvoo-ad-notice-dismissing", {bubbles:true}));
         const dialog = notice.closest("tp-yt-paper-dialog, [role=dialog]") || notice;
         dialog.setAttribute("data-vvoo-dismissing-ad-notice", "");
         button.click();

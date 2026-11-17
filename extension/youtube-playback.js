@@ -5,10 +5,47 @@ function vvooInstallPlaybackFilter(isEnabled) {
   const guardedPlayers = new WeakSet();
   const nativeThen = Promise.prototype.then;
   const functionSource = Function.prototype.toString;
+  let dismissedNotice = null;
+  let dismissalSequence = 0;
+  // The popup's continuation contains only its enforcement probe and guarded pause.
+  // Match the complete shape, not arbitrary callbacks that happen to pause a player.
+  const popupPauseCallback = /^(?:\(\s*\)\s*=>|function(?:\s+[\w$]+)?\s*\(\s*\))\s*\{\s*[\w$]+\(\s*\)\s*;\s*([\w$]+)\.(JSC\$\d+_playerManager)\s*&&\s*\1\.\2\.pause\(\s*\)\s*;?\s*\}$/;
+
+  function dismissibleAdNotice(notice) {
+    if (!notice?.matches?.("ytd-enforcement-message-view-model") || !notice.querySelector("#dismiss-button button")) return false;
+    const text = [notice.querySelector("#title"), notice.querySelector("#body")]
+      .map(element => element?.textContent || "").join(" ");
+    return /광고\s*차단\s*프로그램|ad\s*blockers?/i.test(text);
+  }
+
+  document.addEventListener("vvoo-ad-notice-dismissing", event => {
+    const notice = event.target;
+    if (isEnabled() && dismissibleAdNotice(notice)) {
+      dismissedNotice = {notice, sequence:++dismissalSequence, time:performance.now(), url:location.href};
+    }
+  });
+
+  function suppressPopupPause(registeredSequence) {
+    const recent = dismissedNotice;
+    dismissedNotice = null;
+    const visible = [...document.querySelectorAll("ytd-enforcement-message-view-model")]
+      .filter(notice => notice.getClientRects().length && getComputedStyle(notice).visibility === "visible");
+    const notice = visible.find(dismissibleAdNotice);
+    if (notice) return true;
+    // Native close can remove the element before Promise.all(openPopup).then runs.
+    // Consume a short-lived, same-page dismissal once; never override manual pause.
+    if (!visible.length && recent && recent.sequence > registeredSequence &&
+        recent.url === location.href && performance.now() - recent.time < 5000) {
+      return true;
+    }
+    return false;
+  }
 
   function hasMedia(player) {
     const streams = player.streamingData;
-    return !!(streams?.formats?.length || streams?.adaptiveFormats?.length || streams?.serverAbrStreamingUrl);
+    const manifest = [streams?.hlsManifestUrl, streams?.dashManifestUrl]
+      .some(url => typeof url === "string" && url.trim().length > 0);
+    return !!(streams?.formats?.length || streams?.adaptiveFormats?.length || streams?.serverAbrStreamingUrl || manifest);
   }
 
   function guardPlayer(player) {
@@ -73,7 +110,14 @@ function vvooInstallPlaybackFilter(isEnabled) {
   // Run all its other work, suppressing only this anti-adblock listener registration.
   Promise.prototype.then = new Proxy(nativeThen, { apply(target, receiver, args) {
     const callback = args[0];
-    if (typeof callback === "function" && /\.addEventListener\(\s*["']onAbnormalityDetected["']/.test(Reflect.apply(functionSource, callback, []))) {
+    const source = typeof callback === "function" ? Reflect.apply(functionSource, callback, []) : "";
+    if (popupPauseCallback.test(source)) {
+      const registeredSequence = dismissalSequence;
+      args[0] = function (...values) {
+        if (isEnabled() && suppressPopupPause(registeredSequence)) return;
+        return Reflect.apply(callback, this, values);
+      };
+    } else if (/\.addEventListener\(\s*["']onAbnormalityDetected["']/.test(source)) {
       args[0] = function (...values) {
         const player = values[0];
         if (!isEnabled() || typeof player?.getPlayerResponse !== "function" || typeof player?.addEventListener !== "function") {

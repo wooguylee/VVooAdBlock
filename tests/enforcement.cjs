@@ -10,8 +10,9 @@ const response = {
   auxiliaryUi: { messageRenderers: { bkaEnforcementMessageViewModel: enforcement } }
 };
 
-module.exports = async function checkEnforcement(page, enabled) {
-  await page.route("https://www.youtube.com/youtubei/v1/player?enforcement", route => route.fulfill({json:response}));
+async function checkEnforcement(page, enabled, streamingData, playable = true) {
+  const payload = {...response, streamingData};
+  await page.route("https://www.youtube.com/youtubei/v1/player?enforcement", route => route.fulfill({json:payload}));
   const result = await page.evaluate(async payload => {
     const serialized = JSON.stringify(payload);
     window.ytInitialPlayerResponse = JSON.parse(serialized);
@@ -53,14 +54,23 @@ module.exports = async function checkEnforcement(page, enabled) {
     return {before, after, unrelated:unrelated.playabilityStatus, unrelatedDetails:unrelated.videoDetails,
       serverStatus:serverError.playabilityStatus.status, stopped:player.stopped,
       initialized:player.initialized, stateChanged:player.stateChanged, listenerRestored:player.addEventListener===originalListener};
-  }, response);
+  }, payload);
   assert.deepEqual(result.before, Array(5).fill(true), "signed renderer values remain unchanged before validation");
-  assert.deepEqual(result.after, Array.from({length:5},()=>enabled?["OK","testContent"]:["ERROR",undefined]),
-    "a playable response must survive the native ad-block enforcement handler across all response readers");
+  assert.deepEqual(result.after, Array.from({length:5},()=>enabled && playable?["OK","testContent"]:["ERROR",undefined]),
+    "only playable responses survive enforcement across all readers: " + JSON.stringify(streamingData));
   assert.deepEqual(result.unrelated, {status:"ERROR",reason:"Network unavailable"});
   assert.equal(result.unrelatedDetails, undefined);
   assert.equal(result.serverStatus,"LOGIN_REQUIRED");
   assert.equal(result.stopped,!enabled,"the abnormality callback must not stop the playable video");
   assert(result.initialized && result.stateChanged && result.listenerRestored,"other callback work and player listeners are preserved");
   await page.unroute("https://www.youtube.com/youtubei/v1/player?enforcement");
+}
+
+module.exports = async function checkEnforcementStreams(page, enabled) {
+  for (const streams of [response.streamingData,
+    {hlsManifestUrl:"https://media.test/live.m3u8"},
+    {dashManifestUrl:"https://media.test/live.mpd"}]) {
+    await checkEnforcement(page, enabled, streams);
+  }
+  await checkEnforcement(page, enabled, {hlsManifestUrl:"", dashManifestUrl:" "}, false);
 };

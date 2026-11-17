@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const checkEnforcement = require("./enforcement.cjs");
+const checkEnforcementPopup = require("./enforcement-popup.cjs");
 
 // The watch page schedules both the dialog and PAUSE_PLAYER from this message.
 const inactivityMessage = { youThereRenderer: { configData: { youThereData: {
@@ -167,6 +168,7 @@ module.exports = async function checkYouTube(context, popupUrl) {
   });
   await page.locator("#three-videos").waitFor({state:"detached",timeout:2500});
   await checkEnforcement(page, true);
+  await checkEnforcementPopup(page, true);
   await page.evaluate(() => {
     document.body.insertAdjacentHTML("beforeend", '<ytd-enforcement-message-view-model id="no-close" style="display:block"><h2 id="title">광고 차단 프로그램 안내</h2></ytd-enforcement-message-view-model>');
     window.ytInitialPlayerResponse = { playabilityStatus: { status: "ERROR", reason: "Unavailable" } };
@@ -233,6 +235,7 @@ module.exports = async function checkYouTube(context, popupUrl) {
   assert(await product.isVisible());
   assert(await page.getByText("광고 카드").isVisible());
   await checkEnforcement(page, false);
+  await checkEnforcementPopup(page, false);
   await page.locator(".html5-video-player").evaluate(player => {
     player.classList.add("ad-showing");
     player.querySelector("button").hidden = false;

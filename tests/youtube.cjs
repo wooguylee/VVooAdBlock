@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const checkEnforcement = require("./enforcement.cjs");
 
 // The watch page schedules both the dialog and PAUSE_PLAYER from this message.
 const inactivityMessage = { youThereRenderer: { configData: { youThereData: {
@@ -158,6 +159,15 @@ module.exports = async function checkYouTube(context, popupUrl) {
   await page.locator("ytd-enforcement-message-view-model").waitFor({state:"detached"});
   assert(await page.locator("dialog[open]").isVisible());
   await page.evaluate(() => {
+    document.body.insertAdjacentHTML("beforeend", `<ytd-enforcement-message-view-model id="three-videos">
+      <div id="title" role="heading">동영상 3개가 재생된 후 동영상 플레이어가 차단됩니다</div>
+      <ul id="body"><li>광고 차단 프로그램을 사용 중인 것 같습니다.</li></ul>
+      <yt-button-view-model id="dismiss-button"><button onclick="this.closest('ytd-enforcement-message-view-model').remove()">닫기</button></yt-button-view-model>
+    </ytd-enforcement-message-view-model>`);
+  });
+  await page.locator("#three-videos").waitFor({state:"detached",timeout:2500});
+  await checkEnforcement(page, true);
+  await page.evaluate(() => {
     document.body.insertAdjacentHTML("beforeend", '<ytd-enforcement-message-view-model id="no-close" style="display:block"><h2 id="title">광고 차단 프로그램 안내</h2></ytd-enforcement-message-view-model>');
     window.ytInitialPlayerResponse = { playabilityStatus: { status: "ERROR", reason: "Unavailable" } };
   });
@@ -222,6 +232,7 @@ module.exports = async function checkYouTube(context, popupUrl) {
   assert.deepEqual(requests, ["/media-test/ad","/media-test/main","/media-test/ad","/media-test/main","/media-test/ad","/media-test/main"]);
   assert(await product.isVisible());
   assert(await page.getByText("광고 카드").isVisible());
+  await checkEnforcement(page, false);
   await page.locator(".html5-video-player").evaluate(player => {
     player.classList.add("ad-showing");
     player.querySelector("button").hidden = false;

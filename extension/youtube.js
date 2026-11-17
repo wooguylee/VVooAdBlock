@@ -25,8 +25,9 @@
 
   function dismissAdNotice() {
     for (const notice of document.querySelectorAll("ytd-enforcement-message-view-model")) {
-      const title = notice.querySelector("#title")?.textContent.trim() || "";
-      if (!/광고\s*차단\s*프로그램|ad\s*blockers?/i.test(title)) continue;
+      const text = [notice.querySelector("#title"), notice.querySelector("#body")]
+        .map(element => element?.textContent || "").join(" ");
+      if (!/광고\s*차단\s*프로그램|ad\s*blockers?/i.test(text)) continue;
       const button = notice.querySelector("#dismiss-button button");
       if (clickable(button) && performance.now() - (lastClick.get(button) ?? -Infinity) > 1000) {
         lastClick.set(button, performance.now());

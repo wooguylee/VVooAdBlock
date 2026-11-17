@@ -2,6 +2,101 @@
 function vvooInstallPlaybackFilter(isEnabled) {
   const playerFields = ["adPlacements", "playerAds", "adSlots", "adBreakHeartbeatParams"];
   const apiPath = /^\/youtubei\/v1\/(?:player|next|get_watch|playlist|reel\/reel_watch_sequence|reel_watch_sequence|navigation\/resolve_url)\/?$/;
+  const guardedPlayers = new WeakSet();
+  const nativeThen = Promise.prototype.then;
+  const functionSource = Function.prototype.toString;
+
+  function hasMedia(player) {
+    const streams = player.streamingData;
+    return !!(streams?.formats?.length || streams?.adaptiveFormats?.length || streams?.serverAbrStreamingUrl);
+  }
+
+  function guardPlayer(player) {
+    if (!player || typeof player !== "object" || guardedPlayers.has(player)) return;
+    const renderers = player.auxiliaryUi?.messageRenderers;
+    const enforcement = renderers?.bkaEnforcementMessageViewModel || renderers?.enforcementMessageViewModel;
+    if (!enforcement || player.playabilityStatus?.status !== "OK" || !player.videoDetails?.videoId || !hasMedia(player)) return;
+    const statusDescriptor = Object.getOwnPropertyDescriptor(player, "playabilityStatus");
+    const detailsDescriptor = Object.getOwnPropertyDescriptor(player, "videoDetails");
+    if (![statusDescriptor, detailsDescriptor].every(d => d?.configurable && d.writable && Object.hasOwn(d, "value"))) return;
+    let status = statusDescriptor.value;
+    let details = detailsDescriptor.value;
+    let keepDetails = false;
+    // YouTube validates signed renderer values before enforcing a block. Preserve
+    // those values; only reject the later client-side replacement of playable data.
+    Object.defineProperties(player, {
+      playabilityStatus: { configurable: true, enumerable: statusDescriptor.enumerable,
+        get() { return status; },
+        set(next) {
+          keepDetails = false;
+          const error = next?.errorScreen?.enforcementMessageViewModel || next?.errorScreen?.bkaEnforcementMessageViewModel;
+          if (isEnabled() && status?.status === "OK" && details?.videoId && hasMedia(player) &&
+              next?.status === "ERROR" && error === enforcement &&
+              enforcement.displayType === "ENFORCEMENT_MESSAGE_VIEW_MODEL_DISPLAY_TYPE_PLAYER") {
+            keepDetails = true;
+            return;
+          }
+          status = next;
+        } },
+      videoDetails: { configurable: true, enumerable: detailsDescriptor.enumerable,
+        get() { return details; },
+        set(next) {
+          if (!(keepDetails && next === undefined && isEnabled())) details = next;
+          keepDetails = false;
+        } }
+    });
+    guardedPlayers.add(player);
+  }
+
+  function guardResponses(data) {
+    if (!isEnabled() || !data || typeof data !== "object") return data;
+    if (Array.isArray(data)) {
+      for (const item of data) guardResponses(item);
+    } else {
+      guardPlayer(data);
+      guardPlayer(data.playerResponse);
+      guardPlayer(data.endpoint?.watchEndpoint?.unserializedPrefetchData?.playerResponse);
+    }
+    return data;
+  }
+
+  // Body streams and Response.json() create new objects after fetch filtering.
+  // Guard the parsed object, without rewriting signed enforcement metadata.
+  JSON.parse = new Proxy(JSON.parse, { apply(target, receiver, args) {
+    return guardResponses(Reflect.apply(target, receiver, args));
+  } });
+  Response.prototype.json = new Proxy(Response.prototype.json, { apply(target, receiver, args) {
+    return Reflect.apply(nativeThen, Reflect.apply(target, receiver, args), [guardResponses]);
+  } });
+
+  // The native player-ready continuation registers a stopVideo/pauseVideo handler.
+  // Run all its other work, suppressing only this anti-adblock listener registration.
+  Promise.prototype.then = new Proxy(nativeThen, { apply(target, receiver, args) {
+    const callback = args[0];
+    if (typeof callback === "function" && /\.addEventListener\(\s*["']onAbnormalityDetected["']/.test(Reflect.apply(functionSource, callback, []))) {
+      args[0] = function (...values) {
+        const player = values[0];
+        if (!isEnabled() || typeof player?.getPlayerResponse !== "function" || typeof player?.addEventListener !== "function") {
+          return Reflect.apply(callback, this, values);
+        }
+        const descriptor = Object.getOwnPropertyDescriptor(player, "addEventListener");
+        const addListener = player.addEventListener;
+        const installed = Reflect.defineProperty(player, "addEventListener", { configurable: true, writable: true,
+          value: function (name, ...rest) {
+            if (name === "onAbnormalityDetected") return;
+            return Reflect.apply(addListener, this, [name, ...rest]);
+          } });
+        try { return Reflect.apply(callback, this, values); }
+        finally {
+          if (installed) {
+            if (descriptor) Object.defineProperty(player, "addEventListener", descriptor);
+            else Reflect.deleteProperty(player, "addEventListener");
+          }
+        }
+      };
+    }
+    return Reflect.apply(target, receiver, args);
+  } });
   function playbackUrl(value) {
     if (!value) return false;
     const url = new URL(value, location.href);
@@ -19,6 +114,7 @@ function vvooInstallPlaybackFilter(isEnabled) {
     const prefetch = data.endpoint?.watchEndpoint?.unserializedPrefetchData;
     for (const player of [data, data.playerResponse, prefetch?.playerResponse]) {
       if (!player || typeof player !== "object") continue;
+      guardPlayer(player);
       for (const field of playerFields) {
         if (Object.hasOwn(player, field) && Reflect.deleteProperty(player, field)) changed = true;
       }
